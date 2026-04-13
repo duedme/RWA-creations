@@ -134,27 +134,25 @@ dist
 
 # End of https://www.toptal.com/developers/gitignore/api/solidity
 
-# Foundry
-/cache
-/out
-/broadcast
+# --- Foundry ---
+/out/
+/cache/
+/broadcast/
 *.bin
 
-# Dependencies
-/lib/
-!/lib/forge-std
+# --- Dependencies ---
+node_modules/
 
-# Environment
+# --- Environment ---
 .env
 .env.local
 .env.*.local
 
-# IDEs
+# --- IDEs ---
 .vscode/
 .idea/
+.cursor/
 
-# OS
+# --- OS ---
 .DS_Store
-
-# Coverage
-/coverage/
+Thumbs.db
