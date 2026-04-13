@@ -2,15 +2,26 @@
 // Compatible with OpenZeppelin Contracts ^5.6.0
 pragma solidity ^0.8.27;
 
-import {AccessManagedUpgradeable} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
+import {
+    AccessManagedUpgradeable
+} from "@openzeppelin/contracts-upgradeable/access/manager/AccessManagedUpgradeable.sol";
 import {ERC1155Upgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC1155/ERC1155Upgradeable.sol";
-import {ERC1155PausableUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155PausableUpgradeable.sol";
-import {ERC1155SupplyUpgradeable} from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
+import {
+    ERC1155PausableUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155PausableUpgradeable.sol";
+import {
+    ERC1155SupplyUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
 
-contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgradeable, ERC1155PausableUpgradeable, ERC1155SupplyUpgradeable {
+contract CollectibleCard is
+    Initializable,
+    ERC1155Upgradeable,
+    AccessManagedUpgradeable,
+    ERC1155PausableUpgradeable,
+    ERC1155SupplyUpgradeable
+{
     /// @custom:oz-upgrades-unsafe-allow constructor
-
     struct Card {
         string card_name;
         string description;
@@ -22,17 +33,19 @@ contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgr
 
     mapping(uint256 => Card) public cards;
 
-    function store_minted_info(address to, string calldata card_name, string calldata description, uint16 amount, string calldata metadata, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
-            public
-        {
+    function store_minted_info(
+        address to,
+        string calldata card_name,
+        string calldata description,
+        uint16 amount,
+        string calldata metadata,
+        uint256[] memory ids,
+        uint256[] memory amounts,
+        bytes memory data
+    ) public {
         uint256 _newId = _cardId;
 
-        cards[_newId] = Card({
-            card_name: card_name,
-            description: description,
-            amount: amount,
-            metadata: metadata
-        });
+        cards[_newId] = Card({card_name: card_name, description: description, amount: amount, metadata: metadata});
 
         _cardId++;
 
@@ -62,12 +75,12 @@ contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgr
         _unpause();
     }
 
-/*     function mint(address account, uint256 id, uint16 amount, bytes memory data)
-        public
-        restricted
-    {
-        _mint(account, id, amount, data);
-    } */
+    /*     function mint(address account, uint256 id, uint16 amount, bytes memory data)
+            public
+            restricted
+        {
+            _mint(account, id, amount, data);
+        } */
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
         public
@@ -86,9 +99,7 @@ contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgr
     }
 }
 
-
-
-/* 
+/*
 Posibles pasos:
 
 - Crear una lista de admins y lista de dueños
@@ -130,5 +141,4 @@ Posibles pasos:
 
 
  */
-
 
