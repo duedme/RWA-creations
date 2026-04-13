@@ -31,11 +31,13 @@ contract CollectibleCard is
 
     uint256 private _cardId;
     address private _royaltyReceiver;
+    string private _contractURI;
 
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
     event MetadataFrozen(uint256 indexed cardId);
     event ModifyRoyalty(uint256 indexed cardId, uint16 royalty);
     event ModifyRoyaltyReceiver(address addr);
+    event ContractURIUpdated();
 
     mapping(uint256 => Card) public cards;
     mapping(uint256 => string) private _cardsURI;
@@ -75,12 +77,26 @@ contract CollectibleCard is
         _disableInitializers();
     }
 
-    function initialize(address initialAuthority, address royaltyRetriever) public initializer {
+    function initialize(
+        address initialAuthority,
+        address royalRetriever,
+        string calldata contractURI_
+    ) public initializer {
         __ERC1155_init("");
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
         __ERC1155Supply_init();
-        _royaltyReceiver = royaltyRetriever;
+        _royaltyReceiver = royalRetriever;
+        _contractURI = contractURI_;
+    }
+
+    function contractURI() public view returns (string memory) {
+        return _contractURI;
+    }
+
+    function setContractURI(string calldata newContractURI) external restricted {
+        _contractURI = newContractURI;
+        emit ContractURIUpdated();
     }
 
     function supportsInterface(bytes4 interfaceId)
