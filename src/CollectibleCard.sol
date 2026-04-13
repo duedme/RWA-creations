@@ -69,6 +69,10 @@ contract CollectibleCard is
         __ERC1155Supply_init();
     }
 
+    function totalCards() public view returns (uint256) {
+        return _cardId;
+    }
+
     function uri(uint256 tokenId) public view override returns (string memory) {
         require(tokenId < _cardId, "Card does not exist");
 
