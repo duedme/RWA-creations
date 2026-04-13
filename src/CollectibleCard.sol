@@ -23,33 +23,37 @@ contract CollectibleCard is
 {
     /// @custom:oz-upgrades-unsafe-allow constructor
     struct Card {
-        string card_name;
+        string cardName;
         string description;
-        uint16 amount;
-        string metadata;
+        uint16 amount;  // Total of fractions
+        string metadata; // Individual URI
+        uint256 pricePerFraction;
+        bool metadataFrozen;
     }
 
     uint256 private _cardId;
 
+    event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
+
     mapping(uint256 => Card) public cards;
 
-    function store_minted_info(
+    function createCard(
         address to,
-        string calldata card_name,
+        string calldata cardName,
         string calldata description,
         uint16 amount,
-        string calldata metadata,
-        uint256[] memory ids,
-        uint256[] memory amounts,
-        bytes memory data
-    ) public {
+        string calldata tokenURI,
+        uint256 price
+    ) external restricted {
         uint256 _newId = _cardId;
 
-        cards[_newId] = Card({card_name: card_name, description: description, amount: amount, metadata: metadata});
+        cards[_newId] = Card({cardName: cardName, description: description, amount: amount, metadata: tokenURI, pricePerFraction: price, metadataFrozen: false});
 
         _cardId++;
 
-        mintBatch(to, ids, amounts, data);
+        mint(to, _newId, amount, "");
+
+        emit CardCreated(_newId, cardName, price, amount);
     }
 
     constructor() {
@@ -75,19 +79,19 @@ contract CollectibleCard is
         _unpause();
     }
 
-    /*     function mint(address account, uint256 id, uint16 amount, bytes memory data)
-            public
-            restricted
-        {
-            _mint(account, id, amount, data);
-        } */
+    function mint(address account, uint256 id, uint16 amount, bytes memory data)
+        public
+        restricted
+    {
+        _mint(account, id, amount, data);
+    }
 
-    function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
+    /* function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
         public
         restricted
     {
         _mintBatch(to, ids, amounts, data);
-    }
+    } */
 
     // The following functions are overrides required by Solidity.
 
