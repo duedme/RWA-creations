@@ -25,19 +25,23 @@ contract CollectibleCard is
     struct Card {
         string cardName;
         string description;
-        uint16 amount;  // Total of fractions
+        uint16 amount;
         uint256 pricePerFraction;
         bool metadataFrozen;
     }
 
     uint256 private _cardId;
+    address private _royaltyReceiver;
 
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
     event PriceModified(uint256 indexed cardId, uint256 price);
     event MetadataFrozen(uint256 indexed cardId);
+    event ModifyRoyalty(uint256 indexed cardId, uint16 royalty);
+    event ModifyRoyaltyReceiver(address addr);
 
     mapping(uint256 => Card) public cards;
     mapping(uint256 => string) private _cardsURI;
+    mapping(uint256 => uint16) private _royalties;
 
     function createCard(
         address to,
@@ -45,13 +49,22 @@ contract CollectibleCard is
         string calldata description,
         uint16 amount,
         string calldata tokenURI,
-        uint256 price
+        uint256 price,
+        uint16 royalty
     ) external restricted {
+        require(royalty <= 10000, "Royalty exceeds 100%");
+
         uint256 _newId = _cardId;
 
-
-        cards[_newId] = Card({cardName: cardName, description: description, amount: amount, pricePerFraction: price, metadataFrozen: false});
+        cards[_newId] = Card({
+            cardName: cardName,
+            description: description,
+            amount: amount,
+            pricePerFraction: price,
+            metadataFrozen: false
+        });
         _cardsURI[_newId] = tokenURI;
+        _royalties[_newId] = royalty;
 
         _cardId++;
 
@@ -64,15 +77,32 @@ contract CollectibleCard is
         _disableInitializers();
     }
 
-    function initialize(address initialAuthority) public initializer {
+    function initialize(address initialAuthority, address royaltyRetriever) public initializer {
         __ERC1155_init("");
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
         __ERC1155Supply_init();
+        _royaltyReceiver = royaltyRetriever;
+    }
+
+    function supportsInterface(bytes4 interfaceId)
+        public view override returns (bool)
+    {
+        // 0x2a55205a = bytes4(keccak256("royaltyInfo(uint256,uint256)"))
+        return interfaceId == 0x2a55205a || super.supportsInterface(interfaceId);
     }
 
     function totalCards() public view returns (uint256) {
         return _cardId;
+    }
+
+    function royaltyReceiver() external view returns (address) {
+        return _royaltyReceiver;
+    }
+
+    function modifyRoyaltyReceiver(address addr) external restricted {
+        _royaltyReceiver = addr;
+        emit ModifyRoyaltyReceiver(addr);
     }
 
     function modifyPrice(uint256 tokenId, uint256 price) external restricted {
@@ -81,14 +111,28 @@ contract CollectibleCard is
         emit PriceModified(tokenId, price);
     }
 
+    function modifyRoyalty(uint256 tokenId, uint16 royalty) external restricted {
+        require(tokenId < _cardId, "Card does not exist");
+        require(royalty <= 10000, "Royalty exceeds 100%");
+        _royalties[tokenId] = royalty;
+        emit ModifyRoyalty(tokenId, royalty);
+    }
+
+    function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
+        external view returns (address receiver, uint256 royaltyAmount)
+    {
+        uint256 royalty = (_salePrice * _royalties[_tokenId]) / 10000;
+        return (_royaltyReceiver, royalty);
+    }
+
     function uri(uint256 tokenId) public view override returns (string memory) {
-        if (tokenId > _cardId) {
+        if (tokenId >= _cardId) {
             return super.uri(tokenId);
         }
 
         string memory tokenURI = _cardsURI[tokenId];
 
-        if (bytes (tokenURI).length > 0) {
+        if (bytes(tokenURI).length > 0) {
             return tokenURI;
         }
 
@@ -106,7 +150,6 @@ contract CollectibleCard is
 
     function freezeMetadata(uint256 tokenId) external restricted {
         require(tokenId < _cardId, "Card does not exist");
-
         cards[tokenId].metadataFrozen = true;
         emit MetadataFrozen(tokenId);
     }
