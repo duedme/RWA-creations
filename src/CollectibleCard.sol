@@ -35,7 +35,7 @@ contract CollectibleCard is
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
 
     mapping(uint256 => Card) public cards;
-    mapping(uint256 => string) public cardsURI;
+    mapping(uint256 => string) private _cardsURI;
 
     function createCard(
         address to,
@@ -49,7 +49,7 @@ contract CollectibleCard is
 
 
         cards[_newId] = Card({cardName: cardName, description: description, amount: amount, pricePerFraction: price, metadataFrozen: false});
-        cardsURI[_newId] = tokenURI;
+        _cardsURI[_newId] = tokenURI;
 
         _cardId++;
 
@@ -70,7 +70,9 @@ contract CollectibleCard is
     }
 
     function uri(uint256 tokenId) public view override returns (string memory) {
-        string memory tokenURI = cardsURI[tokenId];
+        require(tokenId < _cardId, "Card does not exist");
+
+        string memory tokenURI = _cardsURI[tokenId];
 
         if (bytes (tokenURI).length > 0) {
             return tokenURI;
@@ -84,8 +86,14 @@ contract CollectibleCard is
     {
         require(tokenId < _cardId, "Card does not exist");
         require(!cards[tokenId].metadataFrozen, "Metadata is frozen");
-        cardsURI[tokenId] = newURI;
+        _cardsURI[tokenId] = newURI;
         emit URI(newURI, tokenId);
+    }
+
+    function freezeMetadata(uint256 tokenId) external {
+        require(tokenId < _cardId, "Card does not exist");
+
+        cards[tokenId].metadataFrozen = true;
     }
 
     function pause() public restricted {
