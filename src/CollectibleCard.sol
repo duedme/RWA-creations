@@ -26,7 +26,6 @@ contract CollectibleCard is
         string cardName;
         string description;
         uint16 amount;
-        uint256 pricePerFraction;
         bool metadataFrozen;
     }
 
@@ -34,7 +33,6 @@ contract CollectibleCard is
     address private _royaltyReceiver;
 
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
-    event PriceModified(uint256 indexed cardId, uint256 price);
     event MetadataFrozen(uint256 indexed cardId);
     event ModifyRoyalty(uint256 indexed cardId, uint16 royalty);
     event ModifyRoyaltyReceiver(address addr);
@@ -105,11 +103,6 @@ contract CollectibleCard is
         emit ModifyRoyaltyReceiver(addr);
     }
 
-    function modifyPrice(uint256 tokenId, uint256 price) external restricted {
-        require(tokenId < _cardId, "Card does not exist");
-        cards[tokenId].pricePerFraction = price;
-        emit PriceModified(tokenId, price);
-    }
 
     function modifyRoyalty(uint256 tokenId, uint16 royalty) external restricted {
         require(tokenId < _cardId, "Card does not exist");
