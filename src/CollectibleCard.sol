@@ -12,10 +12,31 @@ contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgr
     /// @custom:oz-upgrades-unsafe-allow constructor
 
     struct Card {
-        string name;
+        string card_name;
         string description;
-        uint256 amount;
+        uint16 amount;
         string metadata;
+    }
+
+    uint256 private _cardId;
+
+    mapping(uint256 => Card) public cards;
+
+    function store_minted_info(address to, string calldata card_name, string calldata description, uint16 amount, string calldata metadata, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
+            public
+        {
+        uint256 _newId = _cardId;
+
+        cards[_newId] = Card({
+            card_name: card_name,
+            description: description,
+            amount: amount,
+            metadata: metadata
+        });
+
+        _cardId++;
+
+        mintBatch(to, ids, amounts, data);
     }
 
     constructor() {
@@ -41,12 +62,12 @@ contract CollectibleCard is Initializable, ERC1155Upgradeable, AccessManagedUpgr
         _unpause();
     }
 
-    function mint(address account, uint256 id, uint256 amount, bytes memory data)
+/*     function mint(address account, uint256 id, uint16 amount, bytes memory data)
         public
         restricted
     {
         _mint(account, id, amount, data);
-    }
+    } */
 
     function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
         public
