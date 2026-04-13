@@ -53,7 +53,7 @@ contract CollectibleCard is
 
         _cardId++;
 
-        mint(to, _newId, amount, "");
+        _mint(to, _newId, amount, "");
 
         emit CardCreated(_newId, cardName, price, amount);
     }
@@ -90,7 +90,7 @@ contract CollectibleCard is
         emit URI(newURI, tokenId);
     }
 
-    function freezeMetadata(uint256 tokenId) external {
+    function freezeMetadata(uint256 tokenId) external restricted {
         require(tokenId < _cardId, "Card does not exist");
 
         cards[tokenId].metadataFrozen = true;
@@ -103,20 +103,6 @@ contract CollectibleCard is
     function unpause() public restricted {
         _unpause();
     }
-
-    function mint(address account, uint256 id, uint16 amount, bytes memory data)
-        public
-        restricted
-    {
-        _mint(account, id, amount, data);
-    }
-
-    /* function mintBatch(address to, uint256[] memory ids, uint256[] memory amounts, bytes memory data)
-        public
-        restricted
-    {
-        _mintBatch(to, ids, amounts, data);
-    } */
 
     // The following functions are overrides required by Solidity.
 
