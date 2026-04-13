@@ -33,6 +33,8 @@ contract CollectibleCard is
     uint256 private _cardId;
 
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
+    event PriceModified(uint256 indexed cardId, uint256 price);
+    event MetadataFrozen(uint256 indexed cardId);
 
     mapping(uint256 => Card) public cards;
     mapping(uint256 => string) private _cardsURI;
@@ -73,8 +75,16 @@ contract CollectibleCard is
         return _cardId;
     }
 
-    function uri(uint256 tokenId) public view override returns (string memory) {
+    function modifyPrice(uint256 tokenId, uint256 price) external restricted {
         require(tokenId < _cardId, "Card does not exist");
+        cards[tokenId].pricePerFraction = price;
+        emit PriceModified(tokenId, price);
+    }
+
+    function uri(uint256 tokenId) public view override returns (string memory) {
+        if (tokenId > _cardId) {
+            return super.uri(tokenId);
+        }
 
         string memory tokenURI = _cardsURI[tokenId];
 
@@ -98,6 +108,7 @@ contract CollectibleCard is
         require(tokenId < _cardId, "Card does not exist");
 
         cards[tokenId].metadataFrozen = true;
+        emit MetadataFrozen(tokenId);
     }
 
     function pause() public restricted {
