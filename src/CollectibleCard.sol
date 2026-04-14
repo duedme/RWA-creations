@@ -14,6 +14,7 @@ import {
 } from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
 import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract CollectibleCard is
     Initializable,
@@ -21,7 +22,8 @@ contract CollectibleCard is
     AccessManagedUpgradeable,
     ERC1155PausableUpgradeable,
     ERC1155SupplyUpgradeable,
-    ReentrancyGuardTransient
+    ReentrancyGuardTransient,
+    UUPSUpgradeable
 {
     struct Card {
         string cardName;
@@ -88,6 +90,7 @@ contract CollectibleCard is
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
         __ERC1155Supply_init();
+        __UUPSUpgradeable_init();
         _royaltyReceiver = royalRetriever;
         _contractURI = contractURI_;
     }
@@ -105,6 +108,8 @@ contract CollectibleCard is
         // 0x2a55205a = bytes4(keccak256("royaltyInfo(uint256,uint256)"))
         return interfaceId == 0x2a55205a || super.supportsInterface(interfaceId);
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override restricted {}
 
     function totalCards() public view returns (uint256) {
         return _cardId;
