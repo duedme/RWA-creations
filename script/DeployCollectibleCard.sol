@@ -30,10 +30,8 @@ contract DeployCollectibleCard is Script {
         console.log("Implementation:", address(implementation));
 
         // 3. Deploy proxy UUPS
-        bytes memory initData = abi.encodeCall(
-            CollectibleCard.initialize,
-            (address(manager), royaltyReceiver, contractURI)
-        );
+        bytes memory initData =
+            abi.encodeCall(CollectibleCard.initialize, (address(manager), royaltyReceiver, contractURI));
         ERC1967Proxy proxy = new ERC1967Proxy(address(implementation), initData);
         console.log("Proxy:", address(proxy));
 
