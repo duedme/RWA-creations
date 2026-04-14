@@ -248,5 +248,5 @@ contract CollectibleCard is
         super._update(from, to, ids, values);
     }
 
-    uint256[48] private __gap;
+    uint256[49] private __gap;
 }
