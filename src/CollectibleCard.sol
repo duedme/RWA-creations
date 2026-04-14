@@ -12,7 +12,8 @@ import {
 import {
     ERC1155SupplyUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.sol";
+import {Initializable} from "@openzeppelin/contracts-upgradeable";
+import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 contract CollectibleCard is
     Initializable,
@@ -21,19 +22,19 @@ contract CollectibleCard is
     ERC1155PausableUpgradeable,
     ERC1155SupplyUpgradeable
 {
-    /// @custom:oz-upgrades-unsafe-allow constructor
     struct Card {
         string cardName;
         string description;
-        uint16 amount;
+        uint32 amount;
         bool metadataFrozen;
     }
 
     uint256 private _cardId;
     address private _royaltyReceiver;
     string private _contractURI;
+    uint256[50] private __gap;
 
-    event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint16 amount);
+    event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint32 amount);
     event MetadataFrozen(uint256 indexed cardId);
     event ModifyRoyalty(uint256 indexed cardId, uint16 royalty);
     event ModifyRoyaltyReceiver(address addr);
@@ -47,7 +48,7 @@ contract CollectibleCard is
         address to,
         string calldata cardName,
         string calldata description,
-        uint16 amount,
+        uint32 amount,
         string calldata tokenURI,
         uint256 price,
         uint16 royalty
@@ -56,13 +57,7 @@ contract CollectibleCard is
 
         uint256 _newId = _cardId;
 
-        cards[_newId] = Card({
-            cardName: cardName,
-            description: description,
-            amount: amount,
-            pricePerFraction: price,
-            metadataFrozen: false
-        });
+        cards[_newId] = Card({cardName: cardName, description: description, amount: amount, metadataFrozen: false});
         _cardsURI[_newId] = tokenURI;
         _royalties[_newId] = royalty;
 
@@ -73,15 +68,15 @@ contract CollectibleCard is
         emit CardCreated(_newId, cardName, price, amount);
     }
 
+    /// @custom:oz-upgrades-unsafe-allow constructor
     constructor() {
         _disableInitializers();
     }
 
-    function initialize(
-        address initialAuthority,
-        address royalRetriever,
-        string calldata contractURI_
-    ) public initializer {
+    function initialize(address initialAuthority, address royalRetriever, string calldata contractURI_)
+        public
+        initializer
+    {
         __ERC1155_init("");
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
@@ -99,9 +94,7 @@ contract CollectibleCard is
         emit ContractURIUpdated();
     }
 
-    function supportsInterface(bytes4 interfaceId)
-        public view override returns (bool)
-    {
+    function supportsInterface(bytes4 interfaceId) public view override returns (bool) {
         // 0x2a55205a = bytes4(keccak256("royaltyInfo(uint256,uint256)"))
         return interfaceId == 0x2a55205a || super.supportsInterface(interfaceId);
     }
@@ -119,7 +112,6 @@ contract CollectibleCard is
         emit ModifyRoyaltyReceiver(addr);
     }
 
-
     function modifyRoyalty(uint256 tokenId, uint16 royalty) external restricted {
         require(tokenId < _cardId, "Card does not exist");
         require(royalty <= 10000, "Royalty exceeds 100%");
@@ -128,7 +120,9 @@ contract CollectibleCard is
     }
 
     function royaltyInfo(uint256 _tokenId, uint256 _salePrice)
-        external view returns (address receiver, uint256 royaltyAmount)
+        external
+        view
+        returns (address receiver, uint256 royaltyAmount)
     {
         uint256 royalty = (_salePrice * _royalties[_tokenId]) / 10000;
         return (_royaltyReceiver, royalty);
@@ -148,9 +142,7 @@ contract CollectibleCard is
         return super.uri(tokenId);
     }
 
-    function setTokenURI(uint256 tokenId, string calldata newURI)
-        external restricted
-    {
+    function setTokenURI(uint256 tokenId, string calldata newURI) external restricted {
         require(tokenId < _cardId, "Card does not exist");
         require(!cards[tokenId].metadataFrozen, "Metadata is frozen");
         _cardsURI[tokenId] = newURI;
