@@ -90,7 +90,6 @@ contract CollectibleCard is
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
         __ERC1155Supply_init();
-        __UUPSUpgradeable_init();
         _royaltyReceiver = royalRetriever;
         _contractURI = contractURI_;
     }
