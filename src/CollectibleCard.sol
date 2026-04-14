@@ -12,7 +12,7 @@ import {
 import {
     ERC1155SupplyUpgradeable
 } from "@openzeppelin/contracts-upgradeable/token/ERC1155/extensions/ERC1155SupplyUpgradeable.sol";
-import {Initializable} from "@openzeppelin/contracts-upgradeable";
+import {Initializable} from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import {ReentrancyGuardTransient} from "@openzeppelin/contracts/utils/ReentrancyGuardTransient.sol";
 
 contract CollectibleCard is
@@ -20,7 +20,8 @@ contract CollectibleCard is
     ERC1155Upgradeable,
     AccessManagedUpgradeable,
     ERC1155PausableUpgradeable,
-    ERC1155SupplyUpgradeable
+    ERC1155SupplyUpgradeable,
+    ReentrancyGuardTransient
 {
     struct Card {
         string cardName;
@@ -32,17 +33,23 @@ contract CollectibleCard is
     uint256 private _cardId;
     address private _royaltyReceiver;
     string private _contractURI;
-    uint256[50] private __gap;
+    uint256 private _totalOwedDividends;
 
     event CardCreated(uint256 indexed cardId, string cardName, uint256 originalPrice, uint32 amount);
     event MetadataFrozen(uint256 indexed cardId);
     event ModifyRoyalty(uint256 indexed cardId, uint16 royalty);
     event ModifyRoyaltyReceiver(address addr);
     event ContractURIUpdated();
+    event DividendsDeposited(uint256 indexed tokenId, uint256 amount);
+    event DividendsClaimed(address indexed user, uint256 indexed tokenId, uint256 amount);
+    event FundsWithdrawn(address indexed admin, uint256 amount);
 
     mapping(uint256 => Card) public cards;
     mapping(uint256 => string) private _cardsURI;
     mapping(uint256 => uint16) private _royalties;
+    mapping(uint256 => uint256) private _rewardPerTokenStored;
+    mapping(address => mapping(uint256 => uint256)) private _userRewardPerTokenPaid;
+    mapping(address => mapping(uint256 => uint256)) private _rewards;
 
     function createCard(
         address to,
@@ -163,14 +170,81 @@ contract CollectibleCard is
         _unpause();
     }
 
-    // The following functions are overrides required by Solidity.
+    function depositDividends(uint256 tokenId) external payable restricted {
+        require(tokenId < _cardId, "Card does not exist");
+        require(msg.value > 0, "No ETH sent");
+
+        uint256 supply = totalSupply(tokenId);
+        require(supply > 0, "No fractions in circulation");
+
+        _rewardPerTokenStored[tokenId] += (msg.value * 1e18) / supply;
+        _totalOwedDividends += msg.value;
+
+        emit DividendsDeposited(tokenId, msg.value);
+    }
+
+    function earned(address user, uint256 tokenId) public view returns (uint256) {
+        uint256 balance = balanceOf(user, tokenId);
+        uint256 perToken = _rewardPerTokenStored[tokenId] - _userRewardPerTokenPaid[user][tokenId];
+        return _rewards[user][tokenId] + (balance * perToken) / 1e18;
+    }
+
+    function claimDividends(uint256 tokenId) external nonReentrant {
+        require(tokenId < _cardId, "Card does not exist");
+
+        _updateReward(msg.sender, tokenId);
+
+        uint256 reward = _rewards[msg.sender][tokenId];
+        require(reward > 0, "No dividends to claim");
+
+        // Checks-Effects-Interactions
+        _rewards[msg.sender][tokenId] = 0;
+        _totalOwedDividends -= reward;
+
+        (bool success,) = payable(msg.sender).call{value: reward}("");
+        require(success, "ETH transfer failed");
+
+        emit DividendsClaimed(msg.sender, tokenId, reward);
+    }
+
+    function totalOwedDividends() external view returns (uint256) {
+        return _totalOwedDividends;
+    }
+
+    function withdraw(uint256 amount) external restricted {
+        uint256 available = address(this).balance - _totalOwedDividends;
+        require(amount <= available, "Would withdraw owed dividends");
+
+        (bool success,) = payable(msg.sender).call{value: amount}("");
+        require(success, "ETH transfer failed");
+
+        emit FundsWithdrawn(msg.sender, amount);
+    }
+
+    receive() external payable {}
+
+    // ========== INTERNALS ==========
+
+    function _updateReward(address user, uint256 tokenId) internal {
+        if (user != address(0)) {
+            _rewards[user][tokenId] = earned(user, tokenId);
+            _userRewardPerTokenPaid[user][tokenId] = _rewardPerTokenStored[tokenId];
+        }
+    }
 
     function _update(address from, address to, uint256[] memory ids, uint256[] memory values)
         internal
         override(ERC1155Upgradeable, ERC1155PausableUpgradeable, ERC1155SupplyUpgradeable)
     {
+        for (uint256 i = 0; i < ids.length; i++) {
+            _updateReward(from, ids[i]);
+            _updateReward(to, ids[i]);
+        }
+
         super._update(from, to, ids, values);
     }
+
+    uint256[49] private __gap;
 }
 
 /*
