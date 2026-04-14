@@ -5,8 +5,7 @@ import {Test, console} from "forge-std/Test.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {CollectibleCard} from "../src/CollectibleCard.sol";
-import {UUPSUpgradeable} from
-    "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import {UUPSUpgradeable} from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 contract CollectibleCardTest is Test {
     AccessManager public manager;
@@ -14,8 +13,8 @@ contract CollectibleCardTest is Test {
 
     address public admin = address(this);
     address public alice = makeAddr("alice");
-    address public bob   = makeAddr("bob");
-    address public eve   = makeAddr("eve"); // unauthorized
+    address public bob = makeAddr("bob");
+    address public eve = makeAddr("eve"); // unauthorized
 
     uint64 public constant CARD_MANAGER_ROLE = 1;
     uint64 public constant DIVIDEND_MANAGER_ROLE = 2;
@@ -28,8 +27,7 @@ contract CollectibleCardTest is Test {
         // 2. Implementation + Proxy
         CollectibleCard impl = new CollectibleCard();
         bytes memory initData = abi.encodeCall(
-            CollectibleCard.initialize,
-            (address(manager), admin, "https://example.com/collection.json")
+            CollectibleCard.initialize, (address(manager), admin, "https://example.com/collection.json")
         );
         ERC1967Proxy proxy = new ERC1967Proxy(address(impl), initData);
         card = CollectibleCard(payable(address(proxy)));
@@ -75,8 +73,7 @@ contract CollectibleCardTest is Test {
     // ===== CARD CREATION =====
 
     function test_CreateCard() public {
-        card.createCard(alice, "Dragon", "Fire dragon", 100,
-                        "ipfs://dragon", 1 ether, 500);
+        card.createCard(alice, "Dragon", "Fire dragon", 100, "ipfs://dragon", 1 ether, 500);
         assertEq(card.totalCards(), 1);
         assertEq(card.balanceOf(alice, 0), 100);
     }
@@ -135,9 +132,9 @@ contract CollectibleCardTest is Test {
 
         card.depositDividends{value: 10 ether}(0);
 
-        assertEq(card.earned(admin, 0), 5 ether);  // 50%
-        assertEq(card.earned(alice, 0), 3 ether);  // 30%
-        assertEq(card.earned(bob, 0), 2 ether);    // 20%
+        assertEq(card.earned(admin, 0), 5 ether); // 50%
+        assertEq(card.earned(alice, 0), 3 ether); // 30%
+        assertEq(card.earned(bob, 0), 2 ether); // 20%
     }
 
     function test_ClaimDividends() public {
@@ -160,11 +157,11 @@ contract CollectibleCardTest is Test {
         card.safeTransferFrom(alice, bob, 0, 50, "");
 
         assertEq(card.earned(alice, 0), 10 ether); // ganó antes de transferir
-        assertEq(card.earned(bob, 0), 0);          // no tenía fracciones
+        assertEq(card.earned(bob, 0), 0); // no tenía fracciones
 
         card.depositDividends{value: 10 ether}(0);
-        assertEq(card.earned(alice, 0), 15 ether);  // 10 + 5
-        assertEq(card.earned(bob, 0), 5 ether);     // 0 + 5
+        assertEq(card.earned(alice, 0), 15 ether); // 10 + 5
+        assertEq(card.earned(bob, 0), 5 ether); // 0 + 5
     }
 
     // ===== TOTAL OWED & WITHDRAW =====
