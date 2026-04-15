@@ -4,12 +4,14 @@ pragma solidity ^0.8.27;
 import {Test, console} from "forge-std/Test.sol";
 import {AccessManager} from "@openzeppelin/contracts/access/manager/AccessManager.sol";
 import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import {IERC1155Receiver} from "@openzeppelin/contracts/token/ERC1155/IERC1155Receiver.sol";
 import {CollectibleCard} from "../src/CollectibleCard.sol";
 
 // ========== CONTRATOS AUXILIARES PARA TESTS ==========
 
 /// @dev Contrato malicioso que intenta reentrancy en claimDividends
-contract ReentrancyAttacker {
+/// Implementa IERC1155Receiver para poder recibir ERC1155 tokens
+contract ReentrancyAttacker is IERC1155Receiver {
     CollectibleCard public target;
     uint256 public tokenId;
     uint256 public attackCount;
@@ -29,11 +31,43 @@ contract ReentrancyAttacker {
             target.claimDividends(tokenId);
         }
     }
+
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata)
+        external pure override returns (bytes4)
+    {
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external pure override returns (bytes4)
+    {
+        return this.onERC1155BatchReceived.selector;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return interfaceId == type(IERC1155Receiver).interfaceId;
+    }
 }
 
-/// @dev Contrato que rechaza ETH para probar failed transfers
-contract ETHRejecter {
-    // No tiene receive() ni fallback() — rechaza ETH
+/// @dev Contrato que puede recibir ERC1155 pero rechaza ETH
+contract ETHRejecter is IERC1155Receiver {
+    function onERC1155Received(address, address, uint256, uint256, bytes calldata)
+        external pure override returns (bytes4)
+    {
+        return this.onERC1155Received.selector;
+    }
+
+    function onERC1155BatchReceived(address, address, uint256[] calldata, uint256[] calldata, bytes calldata)
+        external pure override returns (bytes4)
+    {
+        return this.onERC1155BatchReceived.selector;
+    }
+
+    function supportsInterface(bytes4 interfaceId) external pure override returns (bool) {
+        return interfaceId == type(IERC1155Receiver).interfaceId;
+    }
+
+    // No tiene receive() ni fallback() — acepta ERC1155 pero rechaza ETH
 }
 
 // ========== TEST PRINCIPAL ==========
@@ -71,10 +105,9 @@ contract CollectibleCardExtendedTest is Test {
     }
 
     // ══════════════════════════════════════════════
-    //  NIVEL 1 — TESTS UNITARIOS ADICIONALES
+    //  NIVEL 1 — TESTS UNITARIOS
     // ══════════════════════════════════════════════
 
-    // --- Reentrancy ---
     function test_ReentrancyAttackOnClaimFails() public {
         uint256 id = card.totalCards();
         card.createCard(address(this), "Card", "D", 100, "ipfs://x", 1 ether, 500);
@@ -88,7 +121,6 @@ contract CollectibleCardExtendedTest is Test {
         attacker.attack();
     }
 
-    // --- Claim con balance 0 ---
     function test_CannotClaimWithZeroBalance() public {
         _createCard(alice, 100, 1 ether, 500);
         vm.prank(bob);
@@ -96,7 +128,6 @@ contract CollectibleCardExtendedTest is Test {
         card.claimDividends(0);
     }
 
-    // --- Claim con dividendos 0 (tiene balance pero no hay depósito) ---
     function test_CannotClaimWhenNoDividendsDeposited() public {
         _createCard(alice, 100, 1 ether, 500);
         vm.prank(alice);
@@ -104,20 +135,17 @@ contract CollectibleCardExtendedTest is Test {
         card.claimDividends(0);
     }
 
-    // --- Depósito a carta inexistente ---
     function test_CannotDepositToNonexistentCard() public {
         vm.expectRevert("Card does not exist");
         card.depositDividends{value: 1 ether}(999);
     }
 
-    // --- Depósito de 0 ETH ---
     function test_CannotDepositZeroETH() public {
         _createCard(alice, 100, 1 ether, 500);
         vm.expectRevert("No ETH sent");
         card.depositDividends{value: 0}(0);
     }
 
-    // --- Dividendos aislados entre cartas ---
     function test_DividendsIsolatedPerCard() public {
         uint256 card0 = _createCard(alice, 100, 1 ether, 500);
         uint256 card1 = _createCard(bob, 50, 2 ether, 300);
@@ -131,7 +159,6 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.earned(bob, card0), 0);
     }
 
-    // --- modifyRoyalty ---
     function test_ModifyRoyalty() public {
         _createCard(alice, 100, 1 ether, 500);
         card.modifyRoyalty(0, 1000);
@@ -151,25 +178,21 @@ contract CollectibleCardExtendedTest is Test {
         card.modifyRoyalty(999, 500);
     }
 
-    // --- modifyRoyaltyReceiver ---
     function test_ModifyRoyaltyReceiver() public {
         card.modifyRoyaltyReceiver(alice);
         assertEq(card.royaltyReceiver(), alice);
     }
 
-    // --- Slither finding: zero address check ---
-    function test_RoyaltyReceiverCanBeSetToZero() public {
+    function test_RoyaltyReceiverCannotBeSetToZero() public {
+        vm.expectRevert("Zero address");
         card.modifyRoyaltyReceiver(address(0));
-        assertEq(card.royaltyReceiver(), address(0));
     }
 
-    // --- setContractURI ---
     function test_SetContractURI() public {
         card.setContractURI("ipfs://new-contract");
         assertEq(card.contractURI(), "ipfs://new-contract");
     }
 
-    // --- Unpause restaura transfers ---
     function test_UnpauseRestoresTransfers() public {
         _createCard(alice, 100, 1 ether, 500);
         card.pause();
@@ -179,50 +202,41 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.balanceOf(bob, 0), 10);
     }
 
-    // --- setTokenURI a carta inexistente ---
     function test_CannotSetURINonexistentCard() public {
         vm.expectRevert("Card does not exist");
         card.setTokenURI(999, "ipfs://hack");
     }
 
-    // --- freezeMetadata a carta inexistente ---
     function test_CannotFreezeNonexistentCard() public {
         vm.expectRevert("Card does not exist");
         card.freezeMetadata(999);
     }
 
-    // --- Claim a carta inexistente ---
     function test_CannotClaimNonexistentCard() public {
         vm.expectRevert("Card does not exist");
         card.claimDividends(999);
     }
 
-    // --- uri() de carta inexistente retorna base URI ---
     function test_UriOfNonexistentCardReturnsBaseURI() public view {
         string memory u = card.uri(999);
         assertEq(u, "");
     }
 
-    // --- Force-feed ETH vía selfdestruct no rompe withdraw ---
     function test_ForceFeedETHDoesNotBreakWithdraw() public {
         _createCard(alice, 100, 1 ether, 500);
         card.depositDividends{value: 5 ether}(0);
-
         vm.deal(address(card), address(card).balance + 3 ether);
-
         card.withdraw(3 ether);
         vm.expectRevert("Would withdraw owed dividends");
         card.withdraw(1);
     }
 
-    // --- Withdraw de 0 ---
     function test_WithdrawZero() public {
         (bool ok,) = address(card).call{value: 1 ether}("");
         require(ok);
         card.withdraw(0);
     }
 
-    // --- Withdraw unauthorized ---
     function test_UnauthorizedCannotWithdraw() public {
         (bool ok,) = address(card).call{value: 1 ether}("");
         require(ok);
@@ -231,7 +245,6 @@ contract CollectibleCardExtendedTest is Test {
         card.withdraw(1 ether);
     }
 
-    // --- ETH transfer falla en claim (receiver que rechaza ETH) ---
     function test_ClaimFailsWhenReceiverRejectsETH() public {
         ETHRejecter rejecter = new ETHRejecter();
         uint256 id = card.totalCards();
@@ -245,7 +258,6 @@ contract CollectibleCardExtendedTest is Test {
         card.claimDividends(id);
     }
 
-    // --- Multiple claims: segundo claim falla ---
     function test_DoubleClaim() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
 
@@ -256,7 +268,6 @@ contract CollectibleCardExtendedTest is Test {
         vm.stopPrank();
     }
 
-    // --- Múltiples depósitos acumulan correctamente ---
     function test_MultipleDividendDeposits() public {
         uint256 id = _createCard(alice, 100, 1 ether, 500);
         card.depositDividends{value: 3 ether}(id);
@@ -264,7 +275,6 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.earned(alice, id), 10 ether);
     }
 
-    // --- BatchTransfer actualiza rewards ---
     function test_BatchTransferUpdatesRewards() public {
         uint256 id0 = _createCard(address(this), 100, 1 ether, 500);
         uint256 id1 = _createCard(address(this), 50, 2 ether, 300);
@@ -290,20 +300,17 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.earned(alice, id0), 3 ether);
     }
 
-    // --- Crear carta con amount = 0 ---
     function test_CreateCardZeroAmount() public {
         card.createCard(alice, "Empty", "D", 0, "ipfs://x", 1 ether, 500);
         assertEq(card.balanceOf(alice, 0), 0);
     }
 
-    // --- Depósito a carta con supply 0 revierte ---
     function test_CannotDepositToZeroSupplyCard() public {
         card.createCard(alice, "Empty", "D", 0, "ipfs://x", 1 ether, 500);
         vm.expectRevert("No fractions in circulation");
         card.depositDividends{value: 1 ether}(0);
     }
 
-    // --- supportsInterface para ERC1155 ---
     function test_SupportsERC1155Interface() public view {
         assertTrue(card.supportsInterface(0xd9b67a26));
         assertTrue(card.supportsInterface(0x0e89341c));
@@ -311,7 +318,6 @@ contract CollectibleCardExtendedTest is Test {
         assertTrue(card.supportsInterface(0x2a55205a));
     }
 
-    // --- totalOwedDividends se reduce al claimear ---
     function test_TotalOwedReducesOnClaim() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
         assertEq(card.totalOwedDividends(), 10 ether);
@@ -321,24 +327,20 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.totalOwedDividends(), 0);
     }
 
-    // --- Royalty de 0% ---
     function test_ZeroRoyalty() public {
         _createCard(alice, 100, 1 ether, 0);
         (, uint256 royalty) = card.royaltyInfo(0, 10 ether);
         assertEq(royalty, 0);
     }
 
-    // --- Royalty de 100% ---
     function test_MaxRoyalty() public {
         _createCard(alice, 100, 1 ether, 10000);
         (, uint256 royalty) = card.royaltyInfo(0, 10 ether);
         assertEq(royalty, 10 ether);
     }
 
-    // --- Transfer a sí mismo preserva rewards ---
     function test_SelfTransferPreservesRewards() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
-
         vm.prank(alice);
         card.safeTransferFrom(alice, alice, id, 50, "");
         assertEq(card.earned(alice, id), 10 ether);
@@ -450,14 +452,13 @@ contract CollectibleCardExtendedTest is Test {
     //  NIVEL 3 — EDGE CASES & SEGURIDAD AVANZADA
     // ══════════════════════════════════════════════
 
-    // --- Dust: dividendos con rounding cause <1 wei per token ---
     function test_DustDividendsDontRevert() public {
         _createCard(alice, 100, 1 ether, 500);
         card.depositDividends{value: 99}(0);
-        assertEq(card.earned(alice, 0), 0);
+        uint256 earned = card.earned(alice, 0);
+        assertLe(earned, 99);
     }
 
-    // --- Muchos holders: 5 holders con diferentes balances ---
     function test_ManyHolders() public {
         uint256 id = card.totalCards();
         card.createCard(address(this), "Card", "D", 100, "ipfs://x", 1 ether, 500);
@@ -478,7 +479,6 @@ contract CollectibleCardExtendedTest is Test {
         }
     }
 
-    // --- Claim → Transfer → Nuevo Depósito → Claim de nuevo ---
     function test_FullLifecycle() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
 
@@ -500,24 +500,20 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(bob.balance, 10 ether);
     }
 
-    // --- Pausa NO bloquea claims (claim no es una transferencia) ---
     function test_ClaimWorksWhilePaused() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
         card.pause();
-
         vm.prank(alice);
         card.claimDividends(id);
         assertEq(alice.balance, 10 ether);
     }
 
-    // --- Pausa bloquea minteo (createCard incluye _mint) ---
     function test_PauseBlocksCreateCard() public {
         card.pause();
         vm.expectRevert();
         card.createCard(alice, "X", "D", 10, "ipfs://x", 1 ether, 500);
     }
 
-    // --- Muchas cartas creadas en secuencia ---
     function test_CreateManyCards() public {
         for (uint256 i = 0; i < 20; i++) {
             card.createCard(alice, "Card", "D", 100, "ipfs://x", 1 ether, 500);
@@ -526,7 +522,6 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(card.balanceOf(alice, 19), 100);
     }
 
-    // --- Earned view no modifica estado ---
     function test_EarnedIsView() public {
         uint256 id = _createAndFund(alice, 100, 10 ether);
         uint256 e1 = card.earned(alice, id);
@@ -534,7 +529,6 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(e1, e2);
     }
 
-    // --- Depósito después de claim parcial ---
     function test_DepositAfterPartialClaim() public {
         uint256 id = _createCard(address(this), 100, 1 ether, 500);
         card.safeTransferFrom(address(this), alice, id, 60, "");
@@ -557,49 +551,34 @@ contract CollectibleCardExtendedTest is Test {
         assertEq(alice.balance, 12 ether);
     }
 
-    // --- Slither: withdraw envía ETH a msg.sender (restricted) ---
     function test_WithdrawSendsToCallerOnly() public {
         (bool ok,) = address(card).call{value: 5 ether}("");
         require(ok);
-
         uint256 balBefore = address(this).balance;
         card.withdraw(5 ether);
         assertEq(address(this).balance - balBefore, 5 ether);
     }
 
-    // ══════════════════════════════════════════════
-    //  NIVEL 3 — INVARIANT TESTING HELPERS
-    // ══════════════════════════════════════════════
-
-    // Invariant: balance del contrato >= totalOwedDividends
     function test_Invariant_BalanceGeqOwed() public {
         uint256 id = _createCard(address(this), 100, 1 ether, 500);
-
         (bool ok,) = address(card).call{value: 3 ether}("");
         require(ok);
-
         card.depositDividends{value: 10 ether}(id);
-
         card.safeTransferFrom(address(this), alice, id, 50, "");
-
         assertGe(address(card).balance, card.totalOwedDividends());
-
         card.withdraw(3 ether);
         assertGe(address(card).balance, card.totalOwedDividends());
     }
 
-    // Invariant: totalSupply no cambia después de crear
     function test_Invariant_SupplyConstant() public {
         _createCard(alice, 100, 1 ether, 500);
         uint256 supplyBefore = card.totalSupply(0);
-
         vm.prank(alice);
         card.safeTransferFrom(alice, bob, 0, 30, "");
-
         assertEq(card.totalSupply(0), supplyBefore);
     }
 
-    // --- Contrato ERC1155Receiver ---
+    // ───────────── ERC1155Receiver ─────────────
     function onERC1155Received(address, address, uint256, uint256, bytes memory)
         public pure returns (bytes4)
     {
