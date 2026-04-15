@@ -86,6 +86,7 @@ contract CollectibleCard is
         public
         initializer
     {
+        require(royalRetriever != address(0), "Zero address");
         __ERC1155_init("");
         __AccessManaged_init(initialAuthority);
         __ERC1155Pausable_init();
@@ -119,6 +120,7 @@ contract CollectibleCard is
     }
 
     function modifyRoyaltyReceiver(address addr) external restricted {
+        require(addr != address(0), "Zero address");
         _royaltyReceiver = addr;
         emit ModifyRoyaltyReceiver(addr);
     }
